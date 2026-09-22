@@ -781,6 +781,250 @@ select:focus,
   z-index: 50;
 }
 
+/* ---------- 配平作业向导 ---------- */
+.wizard-card {
+  margin-top: 18px;
+}
+
+.wizard-create-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.wizard-create-row .text-input {
+  flex: 1;
+}
+
+.wizard-select-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 10px 0 6px;
+}
+
+.badge-info {
+  background: rgba(77, 163, 255, 0.16);
+  color: var(--accent);
+}
+
+.wizard-steps {
+  list-style: none;
+  display: flex;
+  gap: 8px;
+  padding: 0;
+  margin: 12px 0;
+}
+
+.wizard-step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.wizard-step-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.wizard-step.is-current {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.wizard-step.is-current .wizard-step-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #07111f;
+  font-weight: 700;
+}
+
+.wizard-step.is-done {
+  border-color: rgba(61, 220, 151, 0.5);
+  color: var(--text);
+}
+
+.wizard-step.is-done .wizard-step-dot {
+  background: rgba(61, 220, 151, 0.16);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.wizard-stage-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--panel-2);
+  margin-bottom: 12px;
+}
+
+.wizard-stage-panel h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wizard-paused-badge {
+  font-weight: 600;
+}
+
+.wizard-rotor-select {
+  margin: 8px 0 4px;
+}
+
+.wizard-checks {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.check-pass {
+  color: var(--green);
+}
+
+.check-fail {
+  color: var(--red);
+}
+
+.wizard-note {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+}
+
+.wizard-note:focus {
+  border-color: var(--accent);
+}
+
+.wizard-note:disabled {
+  opacity: 0.55;
+}
+
+.wizard-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.wizard-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.wizard-mismatch {
+  margin: 6px 0 10px;
+  padding: 8px 12px;
+  border: 1px solid rgba(240, 180, 41, 0.5);
+  background: rgba(240, 180, 41, 0.1);
+  border-radius: 8px;
+  color: var(--yellow);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.wizard-completed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  border: 1px solid rgba(61, 220, 151, 0.4);
+  background: rgba(61, 220, 151, 0.08);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.wizard-subtitle {
+  margin: 14px 0 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.wizard-records {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wizard-record {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: var(--panel-2);
+}
+
+.wizard-record-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.wizard-record-note {
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+.wizard-snapshot-detail {
+  margin-top: 4px;
+}
+
+.wizard-snapshot-detail summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.wizard-snapshot-weights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 /* ---------- 响应式 ---------- */
 @media (max-width: 900px) {
   .layout {
@@ -793,5 +1037,13 @@ select:focus,
 
   .slot-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .wizard-steps {
+    flex-wrap: wrap;
+  }
+
+  .wizard-step {
+    flex: 1 1 40%;
   }
 }

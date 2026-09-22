@@ -1,30 +1,44 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AnyPlan,
+  BalanceJob,
   BalanceMode,
   BalanceResponse,
   HoleCount,
   MeasurementRecord,
   SavedPlan,
+  StageRecord,
   WorkbenchDraft,
 } from './types';
 import { fetchBalance } from './api/balance';
 import {
   deleteMeasurement,
   deletePlan,
+  loadActiveJobId,
   loadDraft,
+  loadJobs,
   loadMeasurements,
   loadPlans,
+  persistActiveJobId,
   persistDraft,
+  persistJobs,
   saveMeasurement,
   savePlan,
 } from './lib/storage';
+import {
+  STAGES,
+  STAGE_LABELS,
+  currentStageOf,
+  gateMessage,
+  isJobCompleted,
+} from './lib/jobFlow';
 import { RotorDiagram } from './components/RotorDiagram';
 import { StatusPanel } from './components/StatusPanel';
 import { RecommendPanel } from './components/RecommendPanel';
 import { WeightTable } from './components/WeightTable';
 import { PlanBar } from './components/PlanBar';
 import { BatchPanel } from './components/BatchPanel';
+import { JobWizard } from './components/JobWizard';
 
 const HOLE_OPTIONS: HoleCount[] = [8, 12, 24];
 const DEFAULT_THRESHOLD = 1;
@@ -76,6 +90,10 @@ export default function App() {
   const [plans, setPlans] = useState<SavedPlan[]>(() => loadPlans());
   const [measurements, setMeasurements] = useState<MeasurementRecord[]>(() =>
     loadMeasurements(),
+  );
+  const [jobs, setJobs] = useState<BalanceJob[]>(() => loadJobs());
+  const [activeJobId, setActiveJobIdState] = useState<string | null>(() =>
+    loadActiveJobId(),
   );
   const [activePlan, setActivePlan] = useState<AnyPlan | null>(null);
   const [resetSignal, setResetSignal] = useState(0);
@@ -300,6 +318,166 @@ export default function App() {
     [showToast],
   );
 
+  // ---------- 配平作业向导（全部记录仅存浏览器本地） ----------
+
+  const activeJob = useMemo(
+    () => jobs.find((job) => job.id === activeJobId) ?? null,
+    [jobs, activeJobId],
+  );
+
+  const setActiveJobId = useCallback((id: string | null) => {
+    setActiveJobIdState(id);
+    persistActiveJobId(id);
+  }, []);
+
+  const handleCreateJob = useCallback(
+    (jobNo: string): string | null => {
+      const trimmed = jobNo.trim();
+      if (!trimmed) return '请输入作业编号';
+      if (jobs.some((job) => job.jobNo === trimmed)) {
+        return `作业编号「${trimmed}」已存在，请更换`;
+      }
+      const job: BalanceJob = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        jobNo: trimmed,
+        createdAt: Date.now(),
+        holeCount: null,
+        paused: false,
+        completedAt: null,
+        records: [],
+      };
+      const next = [job, ...jobs];
+      setJobs(next);
+      persistJobs(next);
+      setActiveJobId(job.id);
+      showToast(`作业「${trimmed}」已创建，进入「准备」阶段`);
+      return null;
+    },
+    [jobs, setActiveJobId, showToast],
+  );
+
+  // 准备阶段选择转子：记入作业；与工作台规格不同时同步切换工作台
+  const handleSelectJobRotor = useCallback(
+    (jobId: string, nextHoleCount: HoleCount) => {
+      const job = jobs.find((item) => item.id === jobId);
+      if (!job || job.paused || job.records.length > 0) return;
+      const next = jobs.map((item) =>
+        item.id === jobId ? { ...item, holeCount: nextHoleCount } : item,
+      );
+      setJobs(next);
+      persistJobs(next);
+      if (nextHoleCount !== holeCount) rebuild(nextHoleCount);
+    },
+    [jobs, holeCount, rebuild],
+  );
+
+  // 推进：校验当前阶段条件，通过则保存时间、备注与当时转子快照
+  const handleAdvanceJob = useCallback(
+    (jobId: string, note: string, reviewConfirmed: boolean): string | null => {
+      const job = jobs.find((item) => item.id === jobId);
+      if (!job) return '作业不存在或已被删除';
+      if (isJobCompleted(job)) return '作业已完成，无需再推进';
+      if (job.paused) return '作业已暂停，请先恢复再继续推进';
+      const stage = currentStageOf(job);
+      const magnitude = result?.resultant.magnitude ?? null;
+      const failure = gateMessage(stage, {
+        jobHoleCount: job.holeCount,
+        weights,
+        threshold,
+        magnitude,
+        reviewConfirmed,
+      });
+      if (failure) return failure;
+      const record: StageRecord = {
+        stage,
+        completedAt: Date.now(),
+        note: note.trim(),
+        snapshot: {
+          holeCount,
+          weights: [...weights],
+          locked: [...locked],
+          threshold,
+          magnitude,
+        },
+      };
+      const records = [...job.records, record];
+      const done = records.length >= STAGES.length;
+      const next = jobs.map((item) =>
+        item.id === jobId
+          ? {
+              ...item,
+              records,
+              completedAt: done ? Date.now() : item.completedAt,
+            }
+          : item,
+      );
+      setJobs(next);
+      persistJobs(next);
+      showToast(
+        done
+          ? `作业「${job.jobNo}」复核完成，已归档`
+          : `「${STAGE_LABELS[stage]}」阶段已完成，进入「${
+              STAGE_LABELS[STAGES[records.length]]
+            }」阶段`,
+      );
+      return null;
+    },
+    [jobs, result, holeCount, weights, locked, threshold, showToast],
+  );
+
+  // 回退：截断最后一条阶段记录，回到上一阶段（已完成作业不可回退）
+  const handleBackJob = useCallback(
+    (jobId: string) => {
+      const job = jobs.find((item) => item.id === jobId);
+      if (!job || job.paused || isJobCompleted(job) || job.records.length === 0) {
+        return;
+      }
+      const target = STAGES[job.records.length - 1];
+      const next = jobs.map((item) =>
+        item.id === jobId
+          ? { ...item, records: item.records.slice(0, -1) }
+          : item,
+      );
+      setJobs(next);
+      persistJobs(next);
+      showToast(`已回退到「${STAGE_LABELS[target]}」阶段`);
+    },
+    [jobs, showToast],
+  );
+
+  // 暂停 / 恢复：暂停状态随作业落盘，刷新页面后仍可恢复
+  const handleTogglePauseJob = useCallback(
+    (jobId: string) => {
+      const job = jobs.find((item) => item.id === jobId);
+      if (!job || isJobCompleted(job)) return;
+      const next = jobs.map((item) =>
+        item.id === jobId ? { ...item, paused: !item.paused } : item,
+      );
+      setJobs(next);
+      persistJobs(next);
+      showToast(
+        job.paused
+          ? `作业「${job.jobNo}」已恢复，可继续推进`
+          : `作业「${job.jobNo}」已暂停，可稍后恢复`,
+      );
+    },
+    [jobs, showToast],
+  );
+
+  // 仅允许删除已完成（已归档）的作业
+  const handleDeleteJob = useCallback(
+    (jobId: string) => {
+      const job = jobs.find((item) => item.id === jobId);
+      if (!job || !isJobCompleted(job)) return;
+      const next = jobs.filter((item) => item.id !== jobId);
+      setJobs(next);
+      persistJobs(next);
+      if (activeJobId === jobId) setActiveJobId(null);
+      showToast(`已完成作业「${job.jobNo}」已删除`);
+    },
+    [jobs, activeJobId, setActiveJobId, showToast],
+  );
+
   const lockedCount = useMemo(() => locked.filter(Boolean).length, [locked]);
 
   return (
@@ -378,6 +556,22 @@ export default function App() {
           />
         </div>
       </main>
+
+      <JobWizard
+        jobs={jobs}
+        activeJob={activeJob}
+        holeCount={holeCount}
+        weights={weights}
+        threshold={threshold}
+        magnitude={result?.resultant.magnitude ?? null}
+        onSelectJob={setActiveJobId}
+        onCreateJob={handleCreateJob}
+        onSelectRotor={handleSelectJobRotor}
+        onAdvance={handleAdvanceJob}
+        onBack={handleBackJob}
+        onTogglePause={handleTogglePauseJob}
+        onDelete={handleDeleteJob}
+      />
 
       <WeightTable
         holeCount={holeCount}

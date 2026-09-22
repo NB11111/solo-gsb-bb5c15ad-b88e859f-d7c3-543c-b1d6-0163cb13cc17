@@ -129,3 +129,42 @@ export interface WorkbenchDraft {
   step: number;
   maxPerSlot: number;
 }
+
+/** 配平作业向导的阶段：准备 → 称量 → 配平 → 复核 */
+export type JobStage = 'prepare' | 'weigh' | 'balance' | 'review';
+
+/** 阶段完成时的转子快照（随阶段记录保存，仅存浏览器本地） */
+export interface RotorSnapshot {
+  holeCount: HoleCount;
+  weights: number[];
+  locked: boolean[];
+  threshold: number;
+  /** 当时的失衡合力（g）；尚未算出时为 null */
+  magnitude: number | null;
+}
+
+/** 一个阶段的完成记录 */
+export interface StageRecord {
+  stage: JobStage;
+  /** 阶段完成时间戳 */
+  completedAt: number;
+  /** 阶段备注（可空字符串） */
+  note: string;
+  snapshot: RotorSnapshot;
+}
+
+/** 配平作业（向导流程，全部记录仅存浏览器本地） */
+export interface BalanceJob {
+  id: string;
+  /** 作业编号（用户录入，唯一） */
+  jobNo: string;
+  createdAt: number;
+  /** 准备阶段选择的转子规格；未选择为 null，准备阶段完成后不可再改 */
+  holeCount: HoleCount | null;
+  /** 暂停标记：暂停期间不可推进 / 回退，恢复后继续 */
+  paused: boolean;
+  /** 复核完成（归档）时间；未完成为 null */
+  completedAt: number | null;
+  /** 已完成阶段的记录，顺序即推进顺序；回退时从末尾截断 */
+  records: StageRecord[];
+}
