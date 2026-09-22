@@ -129,3 +129,51 @@ export interface WorkbenchDraft {
   step: number;
   maxPerSlot: number;
 }
+
+/* ---------- 配平作业向导 ---------- */
+
+export type WizardStageId = 'prepare' | 'weigh' | 'balance' | 'review';
+
+export type WizardJobStatus = 'in_progress' | 'paused' | 'completed';
+
+/** 阶段保存瞬间的转子完整快照（仅存浏览器本地，用于作业留痕与回退/恢复） */
+export interface RotorSnapshot {
+  holeCount: HoleCount;
+  weights: number[];
+  locked: boolean[];
+  threshold: number;
+  mode: BalanceMode;
+  step: number;
+  maxPerSlot: number;
+  /** 快照瞬间后端计算的合力（g）；结果尚未就绪时为 null */
+  magnitude: number | null;
+  status: BalanceStatus | null;
+  savedAt: number;
+}
+
+/** 单个阶段的留痕：完成时间、备注、当时转子快照（未完成时后两者之外的时间/快照为 null） */
+export interface WizardStageRecord {
+  savedAt: number | null;
+  note: string;
+  snapshot: RotorSnapshot | null;
+}
+
+/** 一次配平作业：准备 → 称量 → 配平 → 复核 */
+export interface BalanceJob {
+  id: string;
+  /** 用户创建的作业编号 */
+  jobNo: string;
+  createdAt: number;
+  updatedAt: number;
+  completedAt: number | null;
+  status: WizardJobStatus;
+  /** 当前所处阶段；已结项作业停留在 review */
+  currentStage: WizardStageId;
+  /** 准备阶段选择的转子规格（未选择时为 null，准备阶段校验项） */
+  holeCount: HoleCount | null;
+  /** 复核确认勾选（复核阶段校验项） */
+  reviewConfirmed: boolean;
+  stages: Record<WizardStageId, WizardStageRecord>;
+  /** 暂停时捕获的转子现场，恢复时还原到工作台；推进阶段后清空 */
+  pauseSnapshot: RotorSnapshot | null;
+}

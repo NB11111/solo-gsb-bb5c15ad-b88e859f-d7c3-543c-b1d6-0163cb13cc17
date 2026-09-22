@@ -1,30 +1,50 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AnyPlan,
+  BalanceJob,
   BalanceMode,
   BalanceResponse,
   HoleCount,
   MeasurementRecord,
+  RotorSnapshot,
   SavedPlan,
+  WizardStageId,
   WorkbenchDraft,
 } from './types';
 import { fetchBalance } from './api/balance';
 import {
+  deleteJob,
   deleteMeasurement,
   deletePlan,
   loadDraft,
+  loadJobs,
   loadMeasurements,
   loadPlans,
   persistDraft,
+  saveJob,
   saveMeasurement,
   savePlan,
 } from './lib/storage';
+import {
+  STAGE_INDEX,
+  WIZARD_STAGES,
+  advanceJob,
+  createJob,
+  makeSnapshot,
+  pauseJob,
+  resumeJob,
+  resumeSnapshot,
+  rollbackJob,
+  validateStage,
+  withJobUpdate,
+} from './lib/wizard';
 import { RotorDiagram } from './components/RotorDiagram';
 import { StatusPanel } from './components/StatusPanel';
 import { RecommendPanel } from './components/RecommendPanel';
 import { WeightTable } from './components/WeightTable';
 import { PlanBar } from './components/PlanBar';
 import { BatchPanel } from './components/BatchPanel';
+import { WizardPanel } from './components/WizardPanel';
 
 const HOLE_OPTIONS: HoleCount[] = [8, 12, 24];
 const DEFAULT_THRESHOLD = 1;
@@ -77,6 +97,12 @@ export default function App() {
   const [measurements, setMeasurements] = useState<MeasurementRecord[]>(() =>
     loadMeasurements(),
   );
+  const [jobs, setJobs] = useState<BalanceJob[]>(() => loadJobs());
+  const [activeJobId, setActiveJobId] = useState<string | null>(() => {
+    // 刷新恢复：若存在未结项的进行中作业则重新打开（暂停的保持暂停，由用户手动恢复）
+    const stored = loadJobs();
+    return stored.find((job) => job.status === 'in_progress')?.id ?? null;
+  });
   const [activePlan, setActivePlan] = useState<AnyPlan | null>(null);
   const [resetSignal, setResetSignal] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
@@ -300,6 +326,194 @@ export default function App() {
     [showToast],
   );
 
+  /* ---------- 配平作业向导 ---------- */
+
+  const activeJob = useMemo(
+    () =>
+      jobs.find((job) => job.id === activeJobId && job.status === 'in_progress') ??
+      null,
+    [jobs, activeJobId],
+  );
+
+  const liveResult = result
+    ? { magnitude: result.resultant.magnitude, status: result.status }
+    : null;
+
+  /** 用快照还原工作台（恢复 / 回退时） */
+  const restoreDraftFromSnapshot = useCallback((snapshot: RotorSnapshot) => {
+    setDraft({
+      holeCount: snapshot.holeCount,
+      weights: [...snapshot.weights],
+      locked: [...snapshot.locked],
+      threshold: snapshot.threshold,
+      mode: snapshot.mode === 'compensate' ? 'compensate' : 'swap',
+      step:
+        typeof snapshot.step === 'number' && snapshot.step > 0
+          ? snapshot.step
+          : DEFAULT_STEP,
+      maxPerSlot:
+        typeof snapshot.maxPerSlot === 'number' && snapshot.maxPerSlot > 0
+          ? snapshot.maxPerSlot
+          : DEFAULT_MAX_PER_SLOT,
+    });
+    setActivePlan(null);
+    setResetSignal((n) => n + 1);
+  }, []);
+
+  const handleCreateJob = useCallback(
+    (jobNo: string) => {
+      // 同一时刻只允许一个进行中作业：创建前先暂停当前作业并捕获现场
+      if (activeJob && activeJob.status === 'in_progress') {
+        const paused = pauseJob(
+          activeJob,
+          makeSnapshot(draft, liveResult),
+        );
+        setJobs(saveJob(paused));
+      }
+      // 准备阶段默认带出当前工作台转子（用户可在向导内改选）
+      const job = { ...createJob(jobNo), holeCount: draft.holeCount };
+      setJobs(saveJob(job));
+      setActiveJobId(job.id);
+      showToast(`作业「${job.jobNo}」已创建，从准备阶段开始`);
+    },
+    [activeJob, draft, liveResult, showToast],
+  );
+
+  // 顶栏切换转子规格时，若正处于准备阶段则同步作业的转子选择
+  useEffect(() => {
+    if (!activeJob || activeJob.currentStage !== 'prepare') return;
+    if (activeJob.holeCount !== holeCount) {
+      const updated = withJobUpdate(activeJob, { holeCount });
+      setJobs(saveJob(updated));
+    }
+    // 仅在转子规格变化时同步，避免作业其他更新触发回写
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holeCount]);
+
+  const handleWizardSelectRotor = useCallback(
+    (nextHoleCount: HoleCount) => {
+      rebuild(nextHoleCount);
+    },
+    [rebuild],
+  );
+
+  const handleEditNote = useCallback(
+    (stage: WizardStageId, note: string) => {
+      if (!activeJob) return;
+      const updated = withJobUpdate(activeJob, {
+        stages: {
+          ...activeJob.stages,
+          [stage]: { ...activeJob.stages[stage], note },
+        },
+      });
+      setJobs(saveJob(updated));
+    },
+    [activeJob],
+  );
+
+  const handleToggleReview = useCallback(
+    (confirmed: boolean) => {
+      if (!activeJob) return;
+      setJobs(saveJob(withJobUpdate(activeJob, { reviewConfirmed: confirmed })));
+    },
+    [activeJob],
+  );
+
+  const handleAdvance = useCallback(() => {
+    if (!activeJob) return;
+    const error = validateStage(activeJob.currentStage, {
+      jobHoleCount: activeJob.holeCount,
+      weights,
+      magnitude: result?.resultant.magnitude ?? null,
+      status: result?.status ?? null,
+      reviewConfirmed: activeJob.reviewConfirmed,
+    });
+    if (error) {
+      showToast(error);
+      return;
+    }
+    const updated = advanceJob(
+      activeJob,
+      activeJob.stages[activeJob.currentStage].note,
+      makeSnapshot(draft, liveResult),
+    );
+    setJobs(saveJob(updated));
+    if (updated.status === 'completed') {
+      setActiveJobId(null);
+      showToast(`作业「${updated.jobNo}」已复核结项，四阶段记录已保存`);
+    } else {
+      const nextName = WIZARD_STAGES[STAGE_INDEX[updated.currentStage]].name;
+      showToast(`已进入「${nextName}」阶段，时间、备注与转子快照已保存`);
+    }
+  }, [activeJob, weights, result, draft, liveResult, showToast]);
+
+  const handleRollback = useCallback(
+    (target: WizardStageId) => {
+      if (!activeJob) return;
+      if (STAGE_INDEX[target] >= STAGE_INDEX[activeJob.currentStage]) return;
+      const updated = rollbackJob(activeJob, target);
+      setJobs(saveJob(updated));
+      // 工作台还原到目标阶段开始时的转子现场（即上一已完成阶段的快照）
+      let snapshot: RotorSnapshot | null = null;
+      for (let i = STAGE_INDEX[target] - 1; i >= 0 && !snapshot; i -= 1) {
+        snapshot = updated.stages[WIZARD_STAGES[i].id].snapshot;
+      }
+      if (snapshot) {
+        restoreDraftFromSnapshot(snapshot);
+      } else {
+        setDraft(emptyState(updated.holeCount ?? draft.holeCount));
+        setActivePlan(null);
+        setResetSignal((n) => n + 1);
+      }
+      showToast(
+        `已回退到「${WIZARD_STAGES[STAGE_INDEX[target]].name}」阶段，可重新推进`,
+      );
+    },
+    [activeJob, draft.holeCount, restoreDraftFromSnapshot, showToast],
+  );
+
+  const handlePauseJob = useCallback(() => {
+    if (!activeJob) return;
+    const paused = pauseJob(activeJob, makeSnapshot(draft, liveResult));
+    setJobs(saveJob(paused));
+    setActiveJobId(null);
+    showToast(`作业「${paused.jobNo}」已暂停，转子现场已保存，可随时恢复`);
+  }, [activeJob, draft, liveResult, showToast]);
+
+  const handleResumeJob = useCallback(
+    (jobId: string) => {
+      const job = jobs.find((item) => item.id === jobId);
+      if (!job || job.status !== 'paused') return;
+      // 恢复前先暂停当前进行中的作业（同一时刻只允许一个进行中）
+      if (activeJob) {
+        setJobs(saveJob(pauseJob(activeJob, makeSnapshot(draft, liveResult))));
+      }
+      const snapshot = resumeSnapshot(job);
+      if (snapshot) {
+        restoreDraftFromSnapshot(snapshot);
+      } else if (job.holeCount) {
+        setDraft(emptyState(job.holeCount));
+        setActivePlan(null);
+        setResetSignal((n) => n + 1);
+      }
+      setJobs(saveJob(resumeJob(job)));
+      setActiveJobId(job.id);
+      showToast(`作业「${job.jobNo}」已恢复，继续「${
+        WIZARD_STAGES[STAGE_INDEX[job.currentStage]].name
+      }」阶段`);
+    },
+    [jobs, activeJob, draft, liveResult, restoreDraftFromSnapshot, showToast],
+  );
+
+  const handleDeleteJob = useCallback(
+    (jobId: string) => {
+      setJobs(deleteJob(jobId));
+      if (activeJobId === jobId) setActiveJobId(null);
+      showToast('作业已删除');
+    },
+    [activeJobId, showToast],
+  );
+
   const lockedCount = useMemo(() => locked.filter(Boolean).length, [locked]);
 
   return (
@@ -388,6 +602,24 @@ export default function App() {
         onSetWeight={setWeight}
         onToggleLock={toggleLock}
         onClear={clearWeights}
+      />
+
+      <WizardPanel
+        jobs={jobs}
+        activeJob={activeJob}
+        weights={weights}
+        liveMagnitude={result?.resultant.magnitude ?? null}
+        liveStatus={result?.status ?? null}
+        threshold={threshold}
+        onCreateJob={handleCreateJob}
+        onSelectRotor={handleWizardSelectRotor}
+        onEditNote={handleEditNote}
+        onToggleReview={handleToggleReview}
+        onAdvance={handleAdvance}
+        onRollback={handleRollback}
+        onPause={handlePauseJob}
+        onResume={handleResumeJob}
+        onDelete={handleDeleteJob}
       />
 
       <BatchPanel

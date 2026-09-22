@@ -765,6 +765,338 @@ select:focus,
   text-anchor: end;
 }
 
+/* ---------- 配平作业向导 ---------- */
+.wizard-card {
+  margin: 18px 0;
+  border-top: 3px solid var(--accent);
+}
+
+.wizard-create-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.wizard-create-row .text-input {
+  flex: 1;
+}
+
+.wizard-active {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--panel-2);
+}
+
+.wizard-job-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.wizard-job-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wizard-job-title strong {
+  font-size: 15px;
+}
+
+.badge-wizard {
+  background: rgba(77, 163, 255, 0.16);
+  color: var(--accent);
+}
+
+.wizard-stepper {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+.wizard-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding-top: 18px;
+}
+
+.wizard-step::before {
+  content: '';
+  position: absolute;
+  top: 29px;
+  left: -50%;
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.wizard-step:first-child::before {
+  display: none;
+}
+
+.wizard-step-done::before {
+  background: var(--green);
+}
+
+.wizard-step-btn {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+  color: var(--text-dim);
+}
+
+.wizard-step-done .wizard-step-btn {
+  cursor: pointer;
+}
+
+.wizard-step-done .wizard-step-btn:hover .wizard-step-index {
+  border-color: var(--accent);
+}
+
+.wizard-step-index {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--panel);
+}
+
+.wizard-step-done .wizard-step-index {
+  border-color: var(--green);
+  background: rgba(61, 220, 151, 0.18);
+  color: var(--green);
+}
+
+.wizard-step-current .wizard-step-index {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #07111f;
+}
+
+.wizard-step-current .wizard-step-name {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.wizard-step-done .wizard-step-name {
+  color: var(--green);
+}
+
+.wizard-step-time {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.wizard-stage-box {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--panel);
+}
+
+.wizard-stage-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.wizard-requirement {
+  margin-bottom: 10px;
+}
+
+.wizard-rotor-select {
+  width: 200px;
+  margin-bottom: 10px;
+}
+
+.wizard-live {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.wizard-ok-text {
+  color: var(--green);
+}
+
+.wizard-err-text {
+  color: var(--red);
+}
+
+.wizard-review {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.wizard-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.wizard-note-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 8px 0 6px;
+}
+
+.wizard-note {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+}
+
+.wizard-note:focus {
+  border-color: var(--accent);
+}
+
+.wizard-error {
+  margin: 6px 0;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 93, 115, 0.5);
+  background: rgba(255, 93, 115, 0.1);
+  border-radius: 8px;
+  color: var(--red);
+  font-size: 12px;
+}
+
+.wizard-cond-hint {
+  margin-top: 6px;
+  color: var(--yellow);
+}
+
+.wizard-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.wizard-traces {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.stage-trace {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.stage-trace-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.stage-trace-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+}
+
+.stage-note {
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.snapshot-details {
+  margin-top: 4px;
+}
+
+.snapshot-details summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.snapshot-details summary:hover {
+  color: var(--text);
+}
+
+.snapshot-weights {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px 10px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.snapshot-zero {
+  color: var(--text-dim);
+  opacity: 0.6;
+}
+
+.wizard-list {
+  margin-top: 14px;
+}
+
+.wizard-job-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.wizard-detail {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wizard-current-tag {
+  white-space: nowrap;
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed;
